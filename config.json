@@ -1,1 +1,20 @@
-{ "coins": ["DOGE","ETH","XRP","SOL","BTC","ADA","LINK","AVAX","LTC","TRX","BNB","DOT"], "cost": 0.001, "stop": 0.15, "erCut": 0.083 }
+{
+  "coins": [
+    "DOGE",
+    "ETH",
+    "XRP",
+    "SOL",
+    "BTC",
+    "ADA",
+    "LINK",
+    "AVAX",
+    "LTC",
+    "TRX",
+    "BNB",
+    "DOT"
+  ],
+  "cost": 0.001,
+  "stop": 0.15,
+  "erCut": 0.083,
+  "startMs": 1794732108260
+}
