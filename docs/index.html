@@ -1,0 +1,38 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BB-Fade paper trader</title>
+<style>
+:root{--bg:#fff;--fg:#1b1f24;--mut:#6b7280;--card:#f5f6f8;--line:#e2e5ea;--g:#0a8a4a;--r:#c62828}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1317;--fg:#e6e9ee;--mut:#8b94a1;--card:#171c22;--line:#262d36;--g:#3ddc84;--r:#ff6b6b}}
+body{margin:0;font:14px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--fg);padding:16px;max-width:980px;margin:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:22px 0 8px}.m{color:var(--mut)}.g{color:var(--g)}.r{color:var(--r)}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}.c{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
+.big{font-size:22px;font-weight:600}table{border-collapse:collapse;width:100%}th,td{text-align:right;padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap}th:first-child,td:first-child{text-align:left}
+.w{overflow-x:auto}.warn{background:#fff3cd;color:#664d03;border-radius:8px;padding:8px 12px;margin:10px 0}svg{width:100%;height:70px;display:block}
+</style></head><body>
+<h1>BB-Fade paper trader</h1><div class="m">Bollinger(20,2) fade + EMA200 filter, long/short, 4h, 12 coins, 1x. Paper only: never places real orders.</div>
+<div id="app" class="m">Loading…</div>
+<script>
+const REG=['BEAR-CHOP','BEAR-TREND','BULL-CHOP','BULL-TREND'],TREND=[1,3],$=(h)=>document.getElementById('app').innerHTML=h;
+const f=(x,d=2)=>(x>=0?'+':'')+x.toFixed(d),cl=x=>x>=0?'g':'r',ago=ms=>{const h=(Date.now()-ms)/36e5;return h<48?h.toFixed(1)+' h ago':(h/24).toFixed(1)+' days ago'};
+const utc=ms=>new Date(ms).toISOString().slice(0,16).replace('T',' ');
+function stats(tr,alloc){let eq=100,pk=100,dd=0,pts=[100];tr.forEach(t=>{eq*=1+alloc*t.r;pts.push(eq);pk=Math.max(pk,eq);dd=Math.min(dd,eq/pk-1)});
+ const w=tr.filter(t=>t.r>0),gp=w.reduce((a,t)=>a+t.r,0),gl=-tr.filter(t=>t.r<=0).reduce((a,t)=>a+t.r,0);
+ return{n:tr.length,win:tr.length?100*w.length/tr.length:NaN,avg:tr.length?100*tr.reduce((a,t)=>a+t.r,0)/tr.length:NaN,pf:gl>0?gp/gl:(gp>0?Infinity:NaN),ret:eq-100,dd:100*dd,pts}}
+function spark(p){if(p.length<2)return'<svg></svg>';const lo=Math.min(...p),hi=Math.max(...p),s=hi-lo||1;
+ return`<svg viewBox="0 0 300 70" preserveAspectRatio="none"><polyline fill="none" stroke="currentColor" stroke-width="2" points="${p.map((v,i)=>(i/(p.length-1)*300).toFixed(1)+','+(66-(v-lo)/s*62).toFixed(1)).join(' ')}"/></svg>`}
+const num=(x,d=2)=>isNaN(x)?'–':x===Infinity?'∞':x.toFixed(d);
+Promise.all([fetch('data/state.json?'+Date.now()).then(r=>r.json()),fetch('data/trades.json?'+Date.now()).then(r=>r.ok?r.json():[]).catch(()=>[])]).then(([S,T])=>{
+ const coins=Object.entries(S.coins),open=coins.filter(([k,c])=>c.pos),warn=Date.now()-S.updatedMs>10*36e5;
+ const V=[['Z.ai bot: DOGE only, all-in',T.filter(t=>t.sym==='DOGE'),1],['All 12 coins (10% per trade)',T,.1],['12 coins, only BTC TREND regimes',T.filter(t=>TREND.includes(t.reg)),.1]];
+ let h=(warn?`<div class="warn">Data is ${ago(S.updatedMs)}. If this stays old, open the Actions tab on GitHub and re-enable the workflow.</div>`:'')+
+ `<p class="m">Updated ${ago(S.updatedMs)} · paper started ${utc(S.cfg.startMs)} UTC · costs ${(S.cfg.cost*100).toFixed(2)}% per side · BTC now <b>${REG[S.btc.reg]||'unknown'}</b> · ${T.length} closed trades (judge it after 50+, across more than one market regime)</p><div class="row">`;
+ V.forEach(([nm,tr,al])=>{const s=stats(tr,al);h+=`<div class="c"><div class="m">${nm}</div><div class="big ${cl(s.ret)}">${f(s.ret)}%</div><div class="${cl(s.ret)}">${spark(s.pts)}</div><div class="m">${s.n} trades · win ${num(s.win,0)}% · avg ${isNaN(s.avg)?'–':f(s.avg)}% · PF ${num(s.pf)} · max DD ${num(s.dd,1)}%</div></div>`});
+ h+='</div><h2>By BTC regime at entry (all coins)</h2><div class="w"><table><tr><th>Regime</th><th>Trades</th><th>Win %</th><th>Avg trade %</th><th>PF</th></tr>';
+ [0,1,2,3,-1].forEach(g=>{const tr=T.filter(t=>t.reg===g);if(!tr.length&&g<0)return;const s=stats(tr,1);h+=`<tr><td>${REG[g]||'unknown'}</td><td>${s.n}</td><td>${num(s.win,0)}</td><td class="${cl(s.avg)}">${isNaN(s.avg)?'–':f(s.avg)}</td><td>${num(s.pf)}</td></tr>`});
+ h+='</table></div><h2>By coin</h2><div class="w"><table><tr><th>Coin</th><th>Trades</th><th>Win %</th><th>Avg trade %</th><th>Now</th></tr>';
+ coins.forEach(([k,c])=>{const s=stats(T.filter(t=>t.sym===k),1);h+=`<tr><td>${k}</td><td>${s.n}</td><td>${num(s.win,0)}</td><td class="${cl(s.avg)}">${isNaN(s.avg)?'–':f(s.avg)}</td><td>${c.pos?(c.pos.side===1?'LONG':'SHORT')+' since '+utc(c.pos.entryMs):'watching · '+(c.price<c.lo?'below lower band':c.price>c.up?'above upper band':'inside bands')+(c.price>c.ema?' · above EMA200':' · below EMA200')}</td></tr>`});
+ h+='</table></div><h2>Open paper positions</h2>';
+ h+=open.length?'<div class="w"><table><tr><th>Coin</th><th>Side</th><th>Since (UTC)</th><th>Entry</th><th>Now</th><th>Open P/L %</th><th>Regime</th></tr>'+open.map(([k,c])=>{const p=c.pos,u=100*(p.side*(c.price/p.ep-1)-2*S.cfg.cost);return`<tr><td>${k}</td><td>${p.side===1?'long':'short'}</td><td>${utc(p.entryMs)}</td><td>${p.ep}</td><td>${c.price}</td><td class="${cl(u)}">${f(u)}</td><td>${REG[p.reg]||'unknown'}</td></tr>`}).join('')+'</table></div>':'<p class="m">None right now.</p>';
+ h+='<h2>Last 30 closed trades</h2><div class="w"><table><tr><th>Exit (UTC)</th><th>Coin</th><th>Side</th><th>Exit by</th><th>Net %</th><th>Regime</th></tr>'+T.slice(-30).reverse().map(t=>`<tr><td>${utc(t.exitMs)}</td><td>${t.sym}</td><td>${t.side===1?'long':'short'}</td><td>${t.outcome==='mid'?'middle band':'15% stop'}</td><td class="${cl(t.r)}">${f(t.r*100)}</td><td>${REG[t.reg]||'unknown'}</td></tr>`).join('')+'</table></div>';
+ h+='<p class="m">Full data: <a href="data/trades.csv">trades.csv</a> · <a href="data/state.json">state.json</a>. Fills at the signal candle close on Binance spot data (a stand-in for futures). Funding on shorts is not included. Not financial advice.</p>';
+ $(h)}).catch(e=>$('<div class="warn">No data yet. Run the workflow once (Actions tab → BB-Fade scan → Run workflow), then reload this page in a minute.</div>'));
+</script></body></html>
